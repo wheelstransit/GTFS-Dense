@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gtfs-dense"
+version = "0.1.0"
+description = "A parser for the GTFS-Dense binary transit format."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "protobuf",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]

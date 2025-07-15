@@ -1,0 +1,101 @@
+// GTFS-Dense Schema v1.0.0
+// This file defines the structure for a compiled, high-performance transit feed.
+//
+// (c) Wheels Softworks, 2025
+syntax = "proto3";
+
+package gtfsch;
+
+// A top-level container for all the transit data for a region.
+// This is the message that will be serialized to a .gtfsd file.
+message TransitFeed {
+    // Metadata about the feed itself
+    FeedHeader header = 1;
+
+    // All unique entities, stored in lists.
+    // Trips and StopTimes will reference these by their index, not by ID.
+    repeated Route routes = 2;
+    repeated Stop stops = 3;
+    repeated Shape shapes = 4;
+    repeated Calendar calendars = 5;
+    repeated CalendarDate calendar_dates = 6;
+    repeated Trip trips = 7;
+}
+
+message FeedHeader {
+    // The version of the GTFS-Dense spec this file conforms to.
+    string gtfs_dense_version = 1;
+    // Information from agency.txt
+    string agency_name = 2;
+    string agency_url = 3;
+    string agency_timezone = 4;
+    // Timestamp (Unix epoch) of when the file was generated.
+    uint64 timestamp = 5;
+}
+
+// See route_type in the GTFS spec for these enum values.
+enum RouteType {
+    TRAM = 0;
+    SUBWAY = 1;
+    RAIL = 2;
+    BUS = 3;
+    FERRY = 4;
+    CABLE_TRAM = 5;
+    AERIAL_LIFT = 6;
+    FUNICULAR = 7;
+    TROLLEYBUS = 11;
+    MONORAIL = 12;
+}
+
+message Route {
+    string route_id = 1;
+    string route_short_name = 2;
+    string route_long_name = 3;
+    RouteType route_type = 4;
+    string route_color = 5; // Stored as a hex string without '#'
+    string route_text_color = 6;
+}
+
+message Stop {
+    string stop_id = 1;
+    string stop_name = 2;
+    sfixed32 lat_e5 = 3; //scaled by 1e5 and stored as an integer
+    sfixed32 lon_e5 = 4; //same
+    int32 parent_station_index = 5;
+}
+
+message Trip {
+    string trip_id = 1;
+    string trip_headsign = 2;
+    uint32 route_index = 3;
+    optional uint32 shape_index = 4;
+    optional uint32 service_index = 5; // Points to a Calendar message
+    bool direction_id = 6;
+
+    repeated StopTime stop_times = 7;
+}
+
+message StopTime {
+    uint32 stop_index = 1;
+    uint32 arrival_time_seconds = 2;
+    uint32 departure_time_seconds = 3;
+}
+
+message Shape {
+    string shape_id = 1;
+    string encoded_polyline = 2;
+}
+
+message Calendar {
+    string service_id = 1;
+    uint32 days_mask = 2;
+    uint32 start_date = 3;
+    uint32 end_date = 4;
+}
+
+message CalendarDate {
+    string service_id = 1;
+    uint32 date = 2; // Stored as YYYYMMDD
+    // 1 for added, 2 for removed.
+    uint32 exception_type = 3;
+}

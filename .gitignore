@@ -1,0 +1,76 @@
+# .gitignore for the GTFS-Dense project
+
+# --- General Python Artifacts ---
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+wheels/
+
+# Virtual Environments - Never commit your environment folder
+venv/
+env/
+.venv/
+.env/
+
+# --- Testing Artifacts ---
+# Pytest cache
+.pytest_cache/
+
+# Coverage reports
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+
+# --- Generated Protocol Buffers Code ---
+# It's a best practice to generate this file during setup rather than committing it.
+# This ensures the generated code always matches the .proto source file.
+# If you decide to commit this for user convenience, you can comment out the next line.
+proto/*_pb2.py
+proto/*_pb2.pyi
+
+# --- IDEs and Editors ---
+# Visual Studio Code
+.vscode/
+
+# JetBrains / PyCharm
+.idea/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# --- Operating System Files ---
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Local Data Files ---
+# Ignore any large GTFS zip files or generated .gtfsd files at the root
+# level that are used for local testing but should not be part of the repository.
+*.zip
+*.gtfsd
+
+# --- Exceptions to the Rules Above ---
+# The following lines use the "!" prefix to explicitly PREVENT ignoring certain
+# files that would otherwise be caught by the rules above.
+
+# DO NOT ignore the small, sample files in the /examples/ directory.
+!/examples/sample-agency.zip
+!/examples/sample.gtfsd
+
+# DO NOT ignore the specific feed used for running the Python tests.
+!/lib/python/tests/test_feed.gtfsd
