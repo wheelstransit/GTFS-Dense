@@ -8,9 +8,7 @@ version = "0.1.0"
 description = "A parser for the GTFS-Dense binary transit format."
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = [
-    "protobuf",
-]
+dependencies = ["protobuf", "polyline", "tqdm"]
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
