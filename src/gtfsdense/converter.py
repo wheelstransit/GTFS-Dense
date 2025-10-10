@@ -7,6 +7,7 @@ from collections import defaultdict
 import io
 import tempfile
 import os
+from typing import Optional
 
 from . import gtfs_dense_pb2
 import polyline
@@ -49,6 +50,17 @@ class GTFSConverter:
         self.shape_ids = set()
         self.frequencies_data = defaultdict(list)
         self.level_id_to_index = {}
+        self.fare_media_id_to_index = {}
+        self.rider_category_id_to_index = {}
+        self.fare_product_id_to_index = {}
+        self.timeframe_group_id_to_index = {}
+        self.area_id_to_index = {}
+        self.route_index_to_network_id = {}
+        self.network_id_to_index = {}
+        self.route_network_assignment_keys = set()
+        self.leg_group_id_to_index = {}
+        self.network_ids_from_routes = set()
+        self.stop_area_pairs = set()
 
     def convert(self, output_path: Path):
         start_time = time.time()
@@ -58,10 +70,22 @@ class GTFSConverter:
             self._process_feed_info(zf)
             self._process_agencies(zf)
             self._process_routes(zf)
+            self._process_networks(zf)
+            self._populate_route_networks_from_routes()
+            self._process_route_networks(zf)
             self._process_stops(zf)
+            self._process_areas(zf)
+            self._process_stop_areas(zf)
             self._process_calendar(zf)
             self._process_calendar_dates(zf)
+            self._process_timeframes(zf)
             self._process_shapes(zf)
+            self._process_fare_media(zf)
+            self._process_rider_categories(zf)
+            self._process_fare_products(zf)
+            self._process_fare_leg_rules_v2(zf)
+            self._process_fare_leg_join_rules(zf)
+            self._process_fare_transfer_rules(zf)
             self._process_fare_attributes(zf)
             self._process_fare_rules(zf)
             self._process_frequencies(zf)
@@ -116,7 +140,7 @@ class GTFSConverter:
             return [], 0
 
     def _process_feed_info(self, zf):
-        self.feed.header.gtfs_dense_version = "1.4.0"
+        self.feed.header.gtfs_dense_version = "1.6.0"
         self.feed.header.timestamp = int(time.time())
         for info in self._read_gtfs_file(zf, 'feed_info.txt'):
             self.feed.header.feed_publisher_name = info.get('feed_publisher_name', '')
@@ -156,7 +180,368 @@ class GTFSConverter:
             agency_id = row.get('agency_id')
             if agency_id and agency_id in self.agency_id_to_index:
                 route.agency_index = self.agency_id_to_index[agency_id]
+            network_id = row.get('network_id')
+            if network_id:
+                route.network_id = network_id
+                self.route_index_to_network_id[i] = network_id
+                self.network_ids_from_routes.add(network_id)
 
+    def _process_networks(self, zf):
+        for row in self._read_gtfs_file(zf, 'networks.txt'):
+            network_id = row.get('network_id')
+            if not network_id:
+                continue
+            index = self.network_id_to_index.get(network_id)
+            if index is not None:
+                network = self.feed.networks[index]
+            else:
+                network = self.feed.networks.add()
+                network.network_id = network_id
+                index = len(self.feed.networks) - 1
+                self.network_id_to_index[network_id] = index
+            if row.get('network_name'):
+                network.network_name = row['network_name']
+
+        for network_id in sorted(self.network_ids_from_routes):
+            if network_id and network_id not in self.network_id_to_index:
+                network = self.feed.networks.add()
+                network.network_id = network_id
+                self.network_id_to_index[network_id] = len(self.feed.networks) - 1
+
+    def _populate_route_networks_from_routes(self):
+        for route_index, network_id in self.route_index_to_network_id.items():
+            if not network_id:
+                continue
+            network_index = self.network_id_to_index.get(network_id)
+            if network_index is None:
+                continue
+            route = self.feed.routes[route_index]
+            route.network_index = network_index
+            key = (network_index, route_index)
+            if key in self.route_network_assignment_keys:
+                continue
+            assignment = self.feed.route_networks.add()
+            assignment.network_index = network_index
+            assignment.route_index = route_index
+            assignment.network_id = network_id
+            assignment.route_id = route.route_id
+            self.route_network_assignment_keys.add(key)
+
+    def _process_route_networks(self, zf):
+        for row in self._read_gtfs_file(zf, 'route_networks.txt'):
+            network_id = row.get('network_id')
+            route_id = row.get('route_id')
+            if not network_id or not route_id:
+                continue
+            if network_id not in self.network_id_to_index:
+                network = self.feed.networks.add()
+                network.network_id = network_id
+                self.network_id_to_index[network_id] = len(self.feed.networks) - 1
+            network_index = self.network_id_to_index[network_id]
+            route_index = self.route_id_to_index.get(route_id)
+            if route_index is None:
+                continue
+            route = self.feed.routes[route_index]
+            route.network_index = network_index
+            route.network_id = network_id or route.network_id
+            key = (network_index, route_index)
+            if key in self.route_network_assignment_keys:
+                continue
+            assignment = self.feed.route_networks.add()
+            assignment.network_index = network_index
+            assignment.route_index = route_index
+            assignment.network_id = network_id
+            assignment.route_id = route_id
+            self.route_network_assignment_keys.add(key)
+
+    def _process_areas(self, zf):
+        for row in self._read_gtfs_file(zf, 'areas.txt'):
+            area_id = row.get('area_id')
+            if not area_id:
+                continue
+            if area_id in self.area_id_to_index:
+                area = self.feed.areas[self.area_id_to_index[area_id]]
+            else:
+                area = self.feed.areas.add()
+                area.area_id = area_id
+                self.area_id_to_index[area_id] = len(self.feed.areas) - 1
+            if row.get('area_name'):
+                area.area_name = row['area_name']
+
+    def _process_stop_areas(self, zf):
+        for row in self._read_gtfs_file(zf, 'stop_areas.txt'):
+            area_id = row.get('area_id')
+            stop_id = row.get('stop_id')
+            if not area_id or not stop_id:
+                continue
+            if area_id not in self.area_id_to_index:
+                area = self.feed.areas.add()
+                area.area_id = area_id
+                self.area_id_to_index[area_id] = len(self.feed.areas) - 1
+            area_index = self.area_id_to_index[area_id]
+            stop_index = self.stop_id_to_index.get(stop_id)
+            if stop_index is None:
+                continue
+            pair = (area_index, stop_index)
+            if pair in self.stop_area_pairs:
+                continue
+            stop_area = self.feed.stop_areas.add()
+            stop_area.area_index = area_index
+            stop_area.stop_index = stop_index
+            stop_area.area_id = area_id
+            stop_area.stop_id = stop_id
+            self.stop_area_pairs.add(pair)
+
+    def _process_timeframes(self, zf):
+        for row in self._read_gtfs_file(zf, 'timeframes.txt'):
+            group_id = row.get('timeframe_group_id')
+            service_id = row.get('service_id')
+            if not group_id or not service_id:
+                continue
+            if service_id not in self.service_id_to_index:
+                self.service_id_to_index[service_id] = len(self.feed.calendars)
+                placeholder = self.feed.calendars.add()
+                placeholder.service_id = service_id
+            group_index = self.timeframe_group_id_to_index.get(group_id)
+            if group_index is None:
+                timeframe_group = self.feed.timeframe_groups.add()
+                timeframe_group.timeframe_group_id = group_id
+                group_index = len(self.feed.timeframe_groups) - 1
+                self.timeframe_group_id_to_index[group_id] = group_index
+            else:
+                timeframe_group = self.feed.timeframe_groups[group_index]
+
+            window = timeframe_group.windows.add()
+            start_time = (row.get('start_time') or '').strip()
+            end_time = (row.get('end_time') or '').strip()
+            if start_time:
+                window.start_time_seconds = _time_to_seconds(start_time)
+            if end_time:
+                window.end_time_seconds = _time_to_seconds(end_time)
+            window.service_index = self.service_id_to_index[service_id]
+
+    def _process_fare_media(self, zf):
+        for row in self._read_gtfs_file(zf, 'fare_media.txt'):
+            fare_media_id = row.get('fare_media_id')
+            if not fare_media_id:
+                continue
+            index = self.fare_media_id_to_index.get(fare_media_id)
+            if index is not None:
+                media = self.feed.fare_media[index]
+            else:
+                media = self.feed.fare_media.add()
+                media.fare_media_id = fare_media_id
+                index = len(self.feed.fare_media) - 1
+                self.fare_media_id_to_index[fare_media_id] = index
+            if row.get('fare_media_name'):
+                media.fare_media_name = row['fare_media_name']
+            media.fare_media_type = int(row.get('fare_media_type', 0) or 0)
+
+    def _process_rider_categories(self, zf):
+        for row in self._read_gtfs_file(zf, 'rider_categories.txt'):
+            rider_category_id = row.get('rider_category_id')
+            if not rider_category_id:
+                continue
+            index = self.rider_category_id_to_index.get(rider_category_id)
+            if index is not None:
+                category = self.feed.rider_categories[index]
+            else:
+                category = self.feed.rider_categories.add()
+                category.rider_category_id = rider_category_id
+                index = len(self.feed.rider_categories) - 1
+                self.rider_category_id_to_index[rider_category_id] = index
+            category.rider_category_name = row.get('rider_category_name', '')
+            category.is_default_fare_category = bool(int(row.get('is_default_fare_category', 0) or 0))
+            if row.get('eligibility_url'):
+                category.eligibility_url = row['eligibility_url']
+
+    def _process_fare_products(self, zf):
+        for row in self._read_gtfs_file(zf, 'fare_products.txt'):
+            fare_product_id = row.get('fare_product_id')
+            if not fare_product_id:
+                continue
+            index = self.fare_product_id_to_index.get(fare_product_id)
+            if index is None:
+                product = self.feed.fare_products.add()
+                product.fare_product_id = fare_product_id
+                product.fare_product_name = row.get('fare_product_name', '')
+                index = len(self.feed.fare_products) - 1
+                self.fare_product_id_to_index[fare_product_id] = index
+            else:
+                product = self.feed.fare_products[index]
+                if row.get('fare_product_name') and not product.fare_product_name:
+                    product.fare_product_name = row['fare_product_name']
+
+            price = product.prices.add()
+            rider_category_id = row.get('rider_category_id')
+            if rider_category_id:
+                price.rider_category_id = rider_category_id
+                if rider_category_id in self.rider_category_id_to_index:
+                    price.rider_category_index = self.rider_category_id_to_index[rider_category_id]
+            fare_media_id = row.get('fare_media_id')
+            if fare_media_id:
+                price.fare_media_id = fare_media_id
+                if fare_media_id in self.fare_media_id_to_index:
+                    price.fare_media_index = self.fare_media_id_to_index[fare_media_id]
+            amount = row.get('amount')
+            try:
+                price.amount = float(amount) if amount else 0.0
+            except ValueError:
+                price.amount = 0.0
+            price.currency = row.get('currency', '')
+
+    def _ensure_leg_group(self, leg_group_id: Optional[str]) -> Optional[int]:
+        if not leg_group_id:
+            return None
+        index = self.leg_group_id_to_index.get(leg_group_id)
+        if index is None:
+            leg_group = self.feed.fare_leg_groups.add()
+            leg_group.leg_group_id = leg_group_id
+            index = len(self.feed.fare_leg_groups) - 1
+            self.leg_group_id_to_index[leg_group_id] = index
+        return index
+
+    def _process_fare_leg_rules_v2(self, zf):
+        for row in self._read_gtfs_file(zf, 'fare_leg_rules.txt'):
+            fare_product_id = row.get('fare_product_id')
+            if not fare_product_id:
+                continue
+            fare_product_index = self.fare_product_id_to_index.get(fare_product_id)
+            if fare_product_index is None:
+                continue
+            rule = self.feed.fare_leg_rules_v2.add()
+            rule.fare_product_index = fare_product_index
+            rule.fare_product_id = fare_product_id
+
+            leg_group_id = row.get('leg_group_id')
+            leg_group_index = self._ensure_leg_group(leg_group_id)
+            if leg_group_index is not None:
+                rule.leg_group_index = leg_group_index
+                rule.leg_group_id = leg_group_id
+
+            network_id = row.get('network_id')
+            if network_id:
+                rule.network_id = network_id
+                if network_id not in self.network_id_to_index and network_id:
+                    network = self.feed.networks.add()
+                    network.network_id = network_id
+                    self.network_id_to_index[network_id] = len(self.feed.networks) - 1
+                network_index = self.network_id_to_index.get(network_id)
+                if network_index is not None:
+                    rule.network_index = network_index
+
+            from_area_id = row.get('from_area_id')
+            if from_area_id:
+                rule.from_area_id = from_area_id
+                if from_area_id not in self.area_id_to_index:
+                    area = self.feed.areas.add()
+                    area.area_id = from_area_id
+                    self.area_id_to_index[from_area_id] = len(self.feed.areas) - 1
+                rule.from_area_index = self.area_id_to_index[from_area_id]
+
+            to_area_id = row.get('to_area_id')
+            if to_area_id:
+                rule.to_area_id = to_area_id
+                if to_area_id not in self.area_id_to_index:
+                    area = self.feed.areas.add()
+                    area.area_id = to_area_id
+                    self.area_id_to_index[to_area_id] = len(self.feed.areas) - 1
+                rule.to_area_index = self.area_id_to_index[to_area_id]
+
+            from_timeframe_group_id = row.get('from_timeframe_group_id')
+            if from_timeframe_group_id:
+                rule.from_timeframe_group_id = from_timeframe_group_id
+                if from_timeframe_group_id in self.timeframe_group_id_to_index:
+                    rule.from_timeframe_group_index = self.timeframe_group_id_to_index[from_timeframe_group_id]
+
+            to_timeframe_group_id = row.get('to_timeframe_group_id')
+            if to_timeframe_group_id:
+                rule.to_timeframe_group_id = to_timeframe_group_id
+                if to_timeframe_group_id in self.timeframe_group_id_to_index:
+                    rule.to_timeframe_group_index = self.timeframe_group_id_to_index[to_timeframe_group_id]
+
+            if row.get('rule_priority'):
+                try:
+                    rule.rule_priority = int(row['rule_priority'])
+                except ValueError:
+                    pass
+
+    def _process_fare_leg_join_rules(self, zf):
+        for row in self._read_gtfs_file(zf, 'fare_leg_join_rules.txt'):
+            from_network_id = row.get('from_network_id')
+            to_network_id = row.get('to_network_id')
+            if not from_network_id or not to_network_id:
+                continue
+
+            join_rule = self.feed.fare_leg_join_rules.add()
+            from_stop_id = row.get('from_stop_id')
+            to_stop_id = row.get('to_stop_id')
+
+            if from_network_id:
+                join_rule.from_network_id = from_network_id
+                if from_network_id not in self.network_id_to_index:
+                    network = self.feed.networks.add()
+                    network.network_id = from_network_id
+                    self.network_id_to_index[from_network_id] = len(self.feed.networks) - 1
+                join_rule.from_network_index = self.network_id_to_index[from_network_id]
+            if to_network_id:
+                join_rule.to_network_id = to_network_id
+                if to_network_id not in self.network_id_to_index:
+                    network = self.feed.networks.add()
+                    network.network_id = to_network_id
+                    self.network_id_to_index[to_network_id] = len(self.feed.networks) - 1
+                join_rule.to_network_index = self.network_id_to_index[to_network_id]
+
+            if from_stop_id:
+                join_rule.from_stop_id = from_stop_id
+                if from_stop_id in self.stop_id_to_index:
+                    join_rule.from_stop_index = self.stop_id_to_index[from_stop_id]
+            if to_stop_id:
+                join_rule.to_stop_id = to_stop_id
+                if to_stop_id in self.stop_id_to_index:
+                    join_rule.to_stop_index = self.stop_id_to_index[to_stop_id]
+
+    def _process_fare_transfer_rules(self, zf):
+        for row in self._read_gtfs_file(zf, 'fare_transfer_rules.txt'):
+            transfer_rule = self.feed.fare_transfer_rules.add()
+            from_leg_group_id = row.get('from_leg_group_id')
+            to_leg_group_id = row.get('to_leg_group_id')
+            if from_leg_group_id:
+                transfer_rule.from_leg_group_id = from_leg_group_id
+                index = self._ensure_leg_group(from_leg_group_id)
+                if index is not None:
+                    transfer_rule.from_leg_group_index = index
+            if to_leg_group_id:
+                transfer_rule.to_leg_group_id = to_leg_group_id
+                index = self._ensure_leg_group(to_leg_group_id)
+                if index is not None:
+                    transfer_rule.to_leg_group_index = index
+
+            if row.get('transfer_count'):
+                try:
+                    transfer_rule.transfer_count = int(row['transfer_count'])
+                except ValueError:
+                    pass
+            if row.get('duration_limit'):
+                try:
+                    transfer_rule.duration_limit = int(row['duration_limit'])
+                except ValueError:
+                    pass
+            if row.get('duration_limit_type'):
+                try:
+                    transfer_rule.duration_limit_type = int(row['duration_limit_type'])
+                except ValueError:
+                    pass
+
+            fare_transfer_type = row.get('fare_transfer_type')
+            transfer_rule.fare_transfer_type = int(fare_transfer_type or 0)
+
+            fare_product_id = row.get('fare_product_id')
+            if fare_product_id:
+                transfer_rule.fare_product_id = fare_product_id
+                fare_product_index = self.fare_product_id_to_index.get(fare_product_id)
+                if fare_product_index is not None:
+                    transfer_rule.fare_product_index = fare_product_index
     def _process_stops(self, zf):
         for i, row in enumerate(self._read_gtfs_file(zf, 'stops.txt')):
             stop = self.feed.stops.add()

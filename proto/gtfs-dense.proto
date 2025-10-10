@@ -1,4 +1,4 @@
-// GTFS-Dense Schema v1.5.0
+// GTFS-Dense Schema v1.6.0
 //
 // (c) Wheels Softworks, 2025
 syntax = "proto3";
@@ -29,6 +29,18 @@ message TransitFeed {
     repeated Transfer transfers = 11;
     repeated Pathway pathways = 12;
     repeated Level levels = 13;
+    repeated FareMedia fare_media = 14;
+    repeated RiderCategory rider_categories = 15;
+    repeated FareProduct fare_products = 16;
+    repeated TimeframeGroup timeframe_groups = 17;
+    repeated Area areas = 18;
+    repeated StopArea stop_areas = 19;
+    repeated Network networks = 20;
+    repeated RouteNetworkAssignment route_networks = 21;
+    repeated FareLegGroup fare_leg_groups = 22;
+    repeated FareLegRuleV2 fare_leg_rules_v2 = 23;
+    repeated FareLegJoinRule fare_leg_join_rules = 24;
+    repeated FareTransferRule fare_transfer_rules = 25;
 }
 
 message FeedHeader {
@@ -172,6 +184,8 @@ message Route {
     string route_text_color = 5;
     optional uint32 agency_index = 6; // Points to an Agency message
     optional string route_id = 7;
+    optional uint32 network_index = 8;
+    optional string network_id = 9;
 }
 
 enum LocationType {
@@ -316,6 +330,115 @@ message Level {
     string level_name = 3;
 }
 
+message FareMedia {
+    string fare_media_id = 1;
+    optional string fare_media_name = 2;
+    uint32 fare_media_type = 3;
+}
+
+message RiderCategory {
+    string rider_category_id = 1;
+    string rider_category_name = 2;
+    bool is_default_fare_category = 3;
+    optional string eligibility_url = 4;
+}
+
+message FareProductPrice {
+    optional uint32 rider_category_index = 1;
+    optional uint32 fare_media_index = 2;
+    double amount = 3;
+    string currency = 4;
+    optional string rider_category_id = 5;
+    optional string fare_media_id = 6;
+}
+
+message FareProduct {
+    string fare_product_id = 1;
+    optional string fare_product_name = 2;
+    repeated FareProductPrice prices = 3;
+}
+
+message TimeframeWindow {
+    optional uint32 start_time_seconds = 1;
+    optional uint32 end_time_seconds = 2;
+    uint32 service_index = 3;
+}
+
+message TimeframeGroup {
+    string timeframe_group_id = 1;
+    repeated TimeframeWindow windows = 2;
+}
+
+message Area {
+    string area_id = 1;
+    optional string area_name = 2;
+}
+
+message StopArea {
+    uint32 area_index = 1;
+    uint32 stop_index = 2;
+    optional string area_id = 3;
+    optional string stop_id = 4;
+}
+
+message Network {
+    string network_id = 1;
+    optional string network_name = 2;
+}
+
+message RouteNetworkAssignment {
+    uint32 network_index = 1;
+    uint32 route_index = 2;
+    optional string network_id = 3;
+    optional string route_id = 4;
+}
+
+message FareLegGroup {
+    string leg_group_id = 1;
+}
+
+message FareLegRuleV2 {
+    optional uint32 leg_group_index = 1;
+    optional string leg_group_id = 2;
+    optional uint32 network_index = 3;
+    optional string network_id = 4;
+    optional uint32 from_area_index = 5;
+    optional string from_area_id = 6;
+    optional uint32 to_area_index = 7;
+    optional string to_area_id = 8;
+    optional uint32 from_timeframe_group_index = 9;
+    optional string from_timeframe_group_id = 10;
+    optional uint32 to_timeframe_group_index = 11;
+    optional string to_timeframe_group_id = 12;
+    uint32 fare_product_index = 13;
+    optional uint32 rule_priority = 14;
+    optional string fare_product_id = 15;
+}
+
+message FareLegJoinRule {
+    optional uint32 from_network_index = 1;
+    optional uint32 to_network_index = 2;
+    optional uint32 from_stop_index = 3;
+    optional uint32 to_stop_index = 4;
+    optional string from_network_id = 5;
+    optional string to_network_id = 6;
+    optional string from_stop_id = 7;
+    optional string to_stop_id = 8;
+}
+
+message FareTransferRule {
+    optional uint32 from_leg_group_index = 1;
+    optional uint32 to_leg_group_index = 2;
+    optional string from_leg_group_id = 3;
+    optional string to_leg_group_id = 4;
+    optional int32 transfer_count = 5;
+    optional uint32 duration_limit = 6;
+    optional uint32 duration_limit_type = 7;
+    uint32 fare_transfer_type = 8;
+    optional uint32 fare_product_index = 9;
+    optional string fare_product_id = 10;
+}
+
 // -----------------------------------------------------------------------------
 // Shapes Extension
 // -----------------------------------------------------------------------------
@@ -362,6 +485,18 @@ message FeedDiff {
     repeated FareRule added_fare_rules = 9;
     repeated Translation added_translations = 10;
     repeated Shape added_shapes = 11;
+    repeated FareMedia added_fare_media = 32;
+    repeated RiderCategory added_rider_categories = 33;
+    repeated FareProduct added_fare_products = 34;
+    repeated TimeframeGroup added_timeframe_groups = 35;
+    repeated Area added_areas = 36;
+    repeated StopArea added_stop_areas = 37;
+    repeated Network added_networks = 38;
+    repeated RouteNetworkAssignment added_route_networks = 39;
+    repeated FareLegGroup added_fare_leg_groups = 40;
+    repeated FareLegRuleV2 added_fare_leg_rules_v2 = 41;
+    repeated FareLegJoinRule added_fare_leg_join_rules = 42;
+    repeated FareTransferRule added_fare_transfer_rules = 43;
 
     // Updated entities
     repeated UpdatedAgency updated_agencies = 12;
@@ -374,6 +509,18 @@ message FeedDiff {
     repeated UpdatedFareRule updated_fare_rules = 19;
     repeated UpdatedTranslation updated_translations = 20;
     repeated UpdatedShape updated_shapes = 21;
+    repeated UpdatedFareMedia updated_fare_media = 44;
+    repeated UpdatedRiderCategory updated_rider_categories = 45;
+    repeated UpdatedFareProduct updated_fare_products = 46;
+    repeated UpdatedTimeframeGroup updated_timeframe_groups = 47;
+    repeated UpdatedArea updated_areas = 48;
+    repeated UpdatedStopArea updated_stop_areas = 49;
+    repeated UpdatedNetwork updated_networks = 50;
+    repeated UpdatedRouteNetworkAssignment updated_route_networks = 51;
+    repeated UpdatedFareLegGroup updated_fare_leg_groups = 52;
+    repeated UpdatedFareLegRuleV2 updated_fare_leg_rules_v2 = 53;
+    repeated UpdatedFareLegJoinRule updated_fare_leg_join_rules = 54;
+    repeated UpdatedFareTransferRule updated_fare_transfer_rules = 55;
 
     // Deleted entities (by index)
     repeated uint32 deleted_agencies = 22;
@@ -386,6 +533,18 @@ message FeedDiff {
     repeated uint32 deleted_fare_rules = 29;
     repeated uint32 deleted_translations = 30;
     repeated uint32 deleted_shapes = 31;
+    repeated uint32 deleted_fare_media = 56;
+    repeated uint32 deleted_rider_categories = 57;
+    repeated uint32 deleted_fare_products = 58;
+    repeated uint32 deleted_timeframe_groups = 59;
+    repeated uint32 deleted_areas = 60;
+    repeated uint32 deleted_stop_areas = 61;
+    repeated uint32 deleted_networks = 62;
+    repeated uint32 deleted_route_networks = 63;
+    repeated uint32 deleted_fare_leg_groups = 64;
+    repeated uint32 deleted_fare_leg_rules_v2 = 65;
+    repeated uint32 deleted_fare_leg_join_rules = 66;
+    repeated uint32 deleted_fare_transfer_rules = 67;
 }
 
 message FeedDiffHeader {
@@ -447,4 +606,64 @@ message UpdatedFareRule {
 message UpdatedTranslation {
     uint32 index = 1;
     Translation translation = 2;
+}
+
+message UpdatedFareMedia {
+    uint32 index = 1;
+    FareMedia fare_media = 2;
+}
+
+message UpdatedRiderCategory {
+    uint32 index = 1;
+    RiderCategory rider_category = 2;
+}
+
+message UpdatedFareProduct {
+    uint32 index = 1;
+    FareProduct fare_product = 2;
+}
+
+message UpdatedTimeframeGroup {
+    uint32 index = 1;
+    TimeframeGroup timeframe_group = 2;
+}
+
+message UpdatedArea {
+    uint32 index = 1;
+    Area area = 2;
+}
+
+message UpdatedStopArea {
+    uint32 index = 1;
+    StopArea stop_area = 2;
+}
+
+message UpdatedNetwork {
+    uint32 index = 1;
+    Network network = 2;
+}
+
+message UpdatedRouteNetworkAssignment {
+    uint32 index = 1;
+    RouteNetworkAssignment route_network = 2;
+}
+
+message UpdatedFareLegGroup {
+    uint32 index = 1;
+    FareLegGroup fare_leg_group = 2;
+}
+
+message UpdatedFareLegRuleV2 {
+    uint32 index = 1;
+    FareLegRuleV2 fare_leg_rule_v2 = 2;
+}
+
+message UpdatedFareLegJoinRule {
+    uint32 index = 1;
+    FareLegJoinRule fare_leg_join_rule = 2;
+}
+
+message UpdatedFareTransferRule {
+    uint32 index = 1;
+    FareTransferRule fare_transfer_rule = 2;
 }
