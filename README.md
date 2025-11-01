@@ -1,7 +1,7 @@
 # GTFS-Dense (.gtfsd)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Spec Version](https://img.shields.io/badge/spec-v1.2.0-blue.svg)](proto/gtfs-dense.proto)
+[![Spec Version](https://img.shields.io/badge/spec-v1.6.0-blue.svg)](proto/gtfs-dense.proto)
 
 **GTFS-Dense** is a fast, binary serialization format for static public transit data (GTFS).
 
